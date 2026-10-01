@@ -1,3 +1,10 @@
+# StarPilot 6.7.8 — Kia Niro EV AOL test branch
+
+This branch follows the stock Kia cruise main state for AOL on first-generation
+Niro EV vehicles when openpilot longitudinal control is disabled. See
+[NIRO_AOL.md](NIRO_AOL.md) for scope, validation, installation and rollback.
+This is a personal test branch based on StarPilot 6.7.8, not an official release.
+
 # StarPilot
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/firestar5683/StarPilot)
