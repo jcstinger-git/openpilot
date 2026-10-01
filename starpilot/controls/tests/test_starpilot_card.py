@@ -704,6 +704,86 @@ def test_kia_forte_non_scc_main_cruise_aol_restores_state_after_boot(monkeypatch
   assert ret.alwaysOnLateralEnabled is True
 
 
+def make_niro_mode_aol_card(monkeypatch, tmp_path, *, openpilot_longitudinal=False):
+  monkeypatch.setattr(spc, "Params", FakeParams)
+  monkeypatch.setattr(spc, "ERROR_LOGS_PATH", tmp_path)
+  return spc.StarPilotCard(
+    SimpleNamespace(
+      brand="hyundai",
+      carFingerprint=spc.HYUNDAI_CAR.KIA_NIRO_EV,
+      flags=spc.HyundaiFlags.EV,
+      pcmCruise=not openpilot_longitudinal,
+      openpilotLongitudinalControl=openpilot_longitudinal,
+    ),
+    SimpleNamespace(alternativeExperience=spc.ALTERNATIVE_EXPERIENCE.ALWAYS_ON_LATERAL),
+  )
+
+
+def test_niro_stock_scc_mode_cycle_follows_cruise_state(monkeypatch, tmp_path):
+  card = make_niro_mode_aol_card(monkeypatch, tmp_path)
+  fp_state = SimpleNamespace(distancePressed=False)
+  sm = make_sm()
+  toggles = make_toggles(always_on_lateral=True, always_on_lateral_main=True, main_cruise_aol_toggle=True)
+  for available, pressed, expected in (
+    (False, None, False), (True, True, True), (False, False, False),
+    (False, None, False), (True, True, True),
+  ):
+    events = [] if pressed is None else [SimpleNamespace(type=spc.ButtonType.mainCruise, pressed=pressed)]
+    ret = card.update(make_car_state(available=available, button_events=events), fp_state, sm, toggles)
+    assert ret.alwaysOnLateralAllowed is expected
+    assert ret.alwaysOnLateralEnabled is expected
+
+
+def test_niro_stock_scc_waits_for_confirmed_cruise_and_stops_without_button_event(monkeypatch, tmp_path):
+  card = make_niro_mode_aol_card(monkeypatch, tmp_path)
+  fp_state = SimpleNamespace(distancePressed=False)
+  sm = make_sm()
+  toggles = make_toggles(always_on_lateral=True, main_cruise_aol_toggle=True)
+  state = make_car_state(button_events=[SimpleNamespace(type=spc.ButtonType.mainCruise, pressed=True)])
+  ret = card.update(state, fp_state, sm, toggles)
+  assert ret.alwaysOnLateralAllowed is False
+  assert ret.alwaysOnLateralEnabled is False
+  ret = card.update(make_car_state(available=True), fp_state, sm, toggles)
+  assert ret.alwaysOnLateralEnabled is True
+  ret = card.update(make_car_state(available=False), fp_state, sm, toggles)
+  assert ret.alwaysOnLateralAllowed is False
+  assert ret.alwaysOnLateralEnabled is False
+
+
+def test_niro_stock_scc_keeps_aol_on_brake_and_gas_while_cruise_selected(monkeypatch, tmp_path):
+  card = make_niro_mode_aol_card(monkeypatch, tmp_path)
+  fp_state = SimpleNamespace(distancePressed=False)
+  sm = make_sm()
+  toggles = make_toggles(always_on_lateral=True, main_cruise_aol_toggle=True)
+  card.update(make_car_state(available=True, button_events=[SimpleNamespace(type=spc.ButtonType.mainCruise, pressed=True)]),
+              fp_state, sm, toggles)
+  ret = card.update(make_car_state(available=True, brake_pressed=True), fp_state, sm, toggles)
+  assert ret.alwaysOnLateralEnabled is True
+  ret = card.update(make_car_state(available=True, gas_pressed=True), fp_state, sm, toggles)
+  assert ret.alwaysOnLateralEnabled is True
+  ret = card.update(make_car_state(available=False, brake_pressed=True), fp_state, sm, toggles)
+  assert ret.alwaysOnLateralEnabled is False
+
+
+def test_niro_main_state_change_keeps_existing_startup_engagement_gate(monkeypatch, tmp_path):
+  card = make_niro_mode_aol_card(monkeypatch, tmp_path)
+  ret = card.update(make_car_state(available=True), SimpleNamespace(distancePressed=False), make_sm(),
+                    make_toggles(always_on_lateral=True, main_cruise_aol_toggle=True))
+  assert ret.alwaysOnLateralAllowed is True
+  assert ret.alwaysOnLateralEnabled is False
+
+
+def test_niro_software_longitudinal_is_not_changed_by_stock_scc_fix(monkeypatch, tmp_path):
+  card = make_niro_mode_aol_card(monkeypatch, tmp_path, openpilot_longitudinal=True)
+  fp_state = SimpleNamespace(distancePressed=False)
+  sm = make_sm()
+  toggles = make_toggles(always_on_lateral=True, main_cruise_aol_toggle=True)
+  card.update(make_car_state(available=True, button_events=[SimpleNamespace(type=spc.ButtonType.mainCruise, pressed=True)]),
+              fp_state, sm, toggles)
+  ret = card.update(make_car_state(available=False), fp_state, sm, toggles)
+  assert ret.alwaysOnLateralAllowed is True
+
+
 def test_genesis_g90_main_cruise_button_toggles_aol_immediately(monkeypatch, tmp_path):
   monkeypatch.setattr(spc, "Params", FakeParams)
   monkeypatch.setattr(spc, "ERROR_LOGS_PATH", tmp_path)
