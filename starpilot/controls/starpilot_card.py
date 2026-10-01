@@ -260,6 +260,13 @@ class StarPilotCard:
       and starpilot_toggles.main_cruise_aol_toggle
     )
     forte_main_cruise_aol_managed = self.kia_forte_non_scc and starpilot_toggles.main_cruise_aol_toggle
+    # Niro MODE cycles through CRUISE, LIMIT and off. With stock SCC,
+    # follow its confirmed main state rather than toggling on each CRUISE entry.
+    niro_main_cruise_aol_managed = (
+      getattr(self.CP, "carFingerprint", None) == HYUNDAI_CAR.KIA_NIRO_EV
+      and not getattr(self.CP, "openpilotLongitudinalControl", False)
+      and starpilot_toggles.main_cruise_aol_toggle
+    )
 
     if carState.gearShifter in NON_DRIVING_GEARS or not g70_main_cruise_aol_managed:
       self.g70_main_cruise_aol_pending = False
@@ -293,7 +300,7 @@ class StarPilotCard:
               # Wait for that state change before sending active LKAS11 torque.
               self.g70_main_cruise_aol_pending = True
               self.g70_main_cruise_aol_pending_frames = 0
-            elif not forte_main_cruise_aol_managed:
+            elif not (forte_main_cruise_aol_managed or niro_main_cruise_aol_managed):
               self.always_on_lateral_allowed = not self.always_on_lateral_allowed
           elif starpilot_toggles.main_cruise_slc_adopt and starpilot_toggles.speed_limit_controller:
             self.params_memory.put_bool("SLCAdoptSpeedLimit", True)
@@ -317,7 +324,7 @@ class StarPilotCard:
           self.g70_main_cruise_aol_pending = False
           self.g70_main_cruise_aol_pending_frames = 0
 
-    if forte_main_cruise_aol_managed:
+    if forte_main_cruise_aol_managed or niro_main_cruise_aol_managed:
       self.always_on_lateral_allowed = carState.cruiseState.available
 
     if starpilot_toggles.always_on_lateral_main and not button_managed_aol:
